@@ -110,7 +110,7 @@ class Handler(BaseHTTPRequestHandler):
             "Information":    {"mark": "ℹ️", "silent": True,  "ru": "Информация"},
             "Warning":        {"mark": "⚠️", "silent": True,  "ru": "Предупреждение"},
             "Average":        {"mark": "🟠", "silent": False, "ru": "Средняя"},
-            "High":           {"mark": "💥", "silent": False, "ru": "Высокая"},
+            "High":           {"mark": "🔴", "silent": False, "ru": "Высокая"},
             "Disaster":       {"mark": "💀", "silent": False, "ru": "Чрезвычайная"},
         }
 
