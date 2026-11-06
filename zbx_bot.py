@@ -107,30 +107,29 @@ class Handler(BaseHTTPRequestHandler):
         # Перевод уровней важности на русский язык
         severity_map = {
             "Not classified": {"mark": "⚪", "silent": True,  "ru": "Не классифицировано"},
-            "Information":    {"mark": "⚪", "silent": True,  "ru": "Информация"},
-            "Warning":        {"mark": "🟡", "silent": True,  "ru": "Предупреждение"},
+            "Information":    {"mark": "ℹ️", "silent": True,  "ru": "Информация"},
+            "Warning":        {"mark": "⚠️", "silent": True,  "ru": "Предупреждение"},
             "Average":        {"mark": "🟠", "silent": False, "ru": "Средняя"},
-            "High":           {"mark": "🔴", "silent": False, "ru": "Высокая"},
-            "Disaster":       {"mark": "🚨", "silent": False, "ru": "Чрезвычайная"},
+            "High":           {"mark": "💥", "silent": False, "ru": "Высокая"},
+            "Disaster":       {"mark": "💀", "silent": False, "ru": "Чрезвычайная"},
         }
 
-        # Дефолтное значение на случай, если прилетит неизвестный статус
-        sev_settings = severity_map.get(severity, {"mark": "🔴", "silent": False, "ru": severity})
+        sev_settings = severity_map.get(severity, {"mark": "💥", "silent": False, "ru": severity})
 
         if not is_problem:
-            mark = "🟢"
+            mark = "✅"
             disable_sound = False
-            header_text = f"<b>{esc(payload.get('status', ''))}</b> (Решено)"
+            # Переводим статус восстановления на русский язык
+            header_text = f"<b>РЕШЕНО</b>"
         else:
             mark = sev_settings["mark"]
             disable_sound = sev_settings["silent"]
             
-            # Получаем перевод на русский язык
             severity_ru = sev_settings["ru"]
             if severity == "Disaster":
-                header_text = f"🔥 <b>{esc(payload.get('status', '')).upper()}: {esc(severity_ru).upper()}</b> 🔥"
+                header_text = f"🚨 <b>ПРОБЛЕМА: {esc(severity_ru).upper()}</b> 🚨"
             else:
-                header_text = f"<b>{esc(payload.get('status', ''))}</b> [{esc(severity_ru)}]"
+                header_text = f"<b>ПРОБЛЕМА</b> [{esc(severity_ru)}]"
         
         lines = [
             f"{mark} {header_text}",
@@ -157,7 +156,7 @@ class Handler(BaseHTTPRequestHandler):
             if e_date and e_time:
                 lines.append(f"🕒 <b>Старт:</b> {e_date} {e_time}")
             if r_date and r_time:
-                lines.append(f"✅ <b>Конец:</b> {r_date} {r_time}")
+                lines.append(f"🛠 <b>Конец:</b> {r_date} {r_time}")
             if duration:
                 lines.append(f"⏱ <b>Длительность:</b> {duration}")
 
