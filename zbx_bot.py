@@ -51,30 +51,24 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(raw)
 
     def do_GET(self):
-        # Разбираем путь и GET-параметры
         parsed_url = urllib.parse.urlparse(self.path)
         path = parsed_url.path
         params = urllib.parse.parse_qs(parsed_url.query)
 
-        # ДОБАВЛЕНО: Обработка запросов от MikroTik
         if path == "/mikrotik":
-            # Проверяем секретный ключ в параметрах URL
             req_secret = params.get("secret", [""])[0]
             if req_secret != SECRET:
                 self._send(403, "forbidden")
                 return
 
-            # Получаем текст сообщения
             text_raw = params.get("text", [""])[0]
             if not text_raw:
                 self._send(400, "missing text")
                 return
 
-            # Форматируем сообщение от MikroTik (добавляем иконку роутера для красоты)
             formatted_text = f"📟 <b>MikroTik Alert</b>\n{esc(text_raw)}"
 
             try:
-                # Отправляем со звуком (disable_sound=False)
                 send_telegram(formatted_text, disable_sound=False)
             except Exception as exc:
                 print(f"MIKROTIK TELEGRAM ERROR: {exc}", file=sys.stderr, flush=True)
@@ -84,7 +78,6 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, "ok")
             return
 
-        # Хелсчек для Bothost
         if path == "/health":
             self._send(200, "ok")
         else:
@@ -111,29 +104,33 @@ class Handler(BaseHTTPRequestHandler):
         status = str(payload.get("status", "PROBLEM")).upper()
         is_problem = (status == "PROBLEM")
 
+        # Перевод уровней важности на русский язык
         severity_map = {
-            "Not classified": {"mark": "⚪", "silent": True},
-            "Information":    {"mark": "⚪", "silent": True},
-            "Warning":        {"mark": "🟡", "silent": True},
-            "Average":        {"mark": "🟠", "silent": False},
-            "High":           {"mark": "🔴", "silent": False},
-            "Disaster":       {"mark": "🚨", "silent": False},
+            "Not classified": {"mark": "⚪", "silent": True,  "ru": "Не классифицировано"},
+            "Information":    {"mark": "⚪", "silent": True,  "ru": "Информация"},
+            "Warning":        {"mark": "🟡", "silent": True,  "ru": "Предупреждение"},
+            "Average":        {"mark": "🟠", "silent": False, "ru": "Средняя"},
+            "High":           {"mark": "🔴", "silent": False, "ru": "Высокая"},
+            "Disaster":       {"mark": "🚨", "silent": False, "ru": "Чрезвычайная"},
         }
 
-        sev_settings = severity_map.get(severity, {"mark": "🔴", "silent": False})
+        # Дефолтное значение на случай, если прилетит неизвестный статус
+        sev_settings = severity_map.get(severity, {"mark": "🔴", "silent": False, "ru": severity})
 
         if not is_problem:
             mark = "🟢"
-            disable_sound = False  # Без звука для RESOLVED (вы можете поменять на False)
+            disable_sound = False
             header_text = f"<b>{esc(payload.get('status', ''))}</b> (Решено)"
         else:
             mark = sev_settings["mark"]
             disable_sound = sev_settings["silent"]
             
+            # Получаем перевод на русский язык
+            severity_ru = sev_settings["ru"]
             if severity == "Disaster":
-                header_text = f"🔥 <b>{esc(payload.get('status', '')).upper()}: {severity.upper()}</b> 🔥"
+                header_text = f"🔥 <b>{esc(payload.get('status', '')).upper()}: {esc(severity_ru).upper()}</b> 🔥"
             else:
-                header_text = f"<b>{esc(payload.get('status', ''))}</b> [{esc(severity)}]"
+                header_text = f"<b>{esc(payload.get('status', ''))}</b> [{esc(severity_ru)}]"
         
         lines = [
             f"{mark} {header_text}",
