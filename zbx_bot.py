@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
-SECRET = os.environ["ZABBIX_WEBHOOK_SECRET"] # Используем тот же секрет для проверки
+SECRET = os.environ["ZABBIX_WEBHOOK_SECRET"]  # Используем тот же секрет для проверки
 PORT = int(os.environ.get("PORT", "3000"))
 
 def esc(value) -> str:
@@ -24,9 +24,18 @@ def esc(value) -> str:
         .replace(">", "&gt;")
     )
 
+def reformat_date(date_str: str) -> str:
+    """Конвертирует дату из YYYY.MM.DD в DD.MM.YYYY"""
+    if not date_str:
+        return ""
+    parts = date_str.split(".")
+    # Проверяем, что дата пришла в формате YYYY.MM.DD (первая часть состоит из 4 цифр)
+    if len(parts) == 3 and len(parts[0]) == 4:
+        return f"{parts[2]}.{parts[1]}.{parts[0]}"
+    return date_str
+
 def send_telegram(text: str, disable_sound: bool = False) -> None:
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-    
     data = json.dumps({
         "chat_id": CHAT_ID,
         "text": text,
@@ -34,7 +43,6 @@ def send_telegram(text: str, disable_sound: bool = False) -> None:
         "disable_web_page_preview": True,
         "disable_notification": disable_sound,
     }).encode()
-    
     req = urllib.request.Request(
         url, data=data, headers={"Content-Type": "application/json"}
     )
@@ -67,14 +75,12 @@ class Handler(BaseHTTPRequestHandler):
                 return
 
             formatted_text = f"📟 <b>MikroTik Alert</b>\n{esc(text_raw)}"
-
             try:
                 send_telegram(formatted_text, disable_sound=False)
             except Exception as exc:
                 print(f"MIKROTIK TELEGRAM ERROR: {exc}", file=sys.stderr, flush=True)
                 self._send(502, f"telegram error: {str(exc)}")
                 return
-
             self._send(200, "ok")
             return
 
@@ -88,6 +94,7 @@ class Handler(BaseHTTPRequestHandler):
         if parsed_url.path != "/zabbix":
             self._send(404, "not found")
             return
+
         if self.headers.get("X-Webhook-Secret", "") != SECRET:
             self._send(403, "forbidden")
             return
@@ -106,12 +113,12 @@ class Handler(BaseHTTPRequestHandler):
 
         # Перевод уровней важности на русский язык
         severity_map = {
-            "Not classified": {"mark": "⚪", "silent": True,  "ru": "Не классифицировано"},
-            "Information":    {"mark": "ℹ️", "silent": True,  "ru": "Информация"},
-            "Warning":        {"mark": "⚠️", "silent": True,  "ru": "Предупреждение"},
-            "Average":        {"mark": "🟠", "silent": False, "ru": "Средняя"},
-            "High":           {"mark": "🔴", "silent": False, "ru": "Высокая"},
-            "Disaster":       {"mark": "💀", "silent": False, "ru": "Чрезвычайная"},
+            "Not classified": {"mark": "⚪", "silent": True, "ru": "Не классифицировано"},
+            "Information": {"mark": "ℹ️", "silent": True, "ru": "Информация"},
+            "Warning": {"mark": "⚠️", "silent": True, "ru": "Предупреждение"},
+            "Average": {"mark": "🟠", "silent": False, "ru": "Средняя"},
+            "High": {"mark": "🔴", "silent": False, "ru": "Высокая"},
+            "Disaster": {"mark": "💀", "silent": False, "ru": "Чрезвычайная"},
         }
 
         sev_settings = severity_map.get(severity, {"mark": "💥", "silent": False, "ru": severity})
@@ -119,36 +126,36 @@ class Handler(BaseHTTPRequestHandler):
         if not is_problem:
             mark = "✅"
             disable_sound = False
-            # Переводим статус восстановления на русский язык
             header_text = f"<b>РЕШЕНО</b>"
         else:
             mark = sev_settings["mark"]
             disable_sound = sev_settings["silent"]
-            
             severity_ru = sev_settings["ru"]
             if severity == "Disaster":
                 header_text = f"🚨 <b>ПРОБЛЕМА: {esc(severity_ru).upper()}</b> 🚨"
             else:
                 header_text = f"<b>ПРОБЛЕМА</b> [{esc(severity_ru)}]"
-        
+
         lines = [
             f"{mark} {header_text}",
             f"<b>Триггер:</b> {esc(payload.get('name', ''))}",
             f"<b>Хост:</b> {esc(payload.get('host', ''))}",
         ]
-        
+
         opdata = payload.get("opdata") or ""
         if opdata:
             lines.append(f"<b>Данные:</b> {esc(opdata)}")
-            
+
         lines.append("")
 
-        e_date = esc(payload.get("event_date", ""))
+        # Извлекаем и сразу форматируем даты
+        e_date = reformat_date(esc(payload.get("event_date", "")))
+        r_date = reformat_date(esc(payload.get("event_recovery_date", "")))
+        
         e_time = esc(payload.get("event_time", ""))
-        r_date = esc(payload.get("event_recovery_date", ""))
         r_time = esc(payload.get("event_recovery_time", ""))
         duration = esc(payload.get("event_duration", ""))
-        
+
         if is_problem:
             if e_date and e_time:
                 lines.append(f"🕒 <b>Старт:</b> {e_date} {e_time}")
@@ -166,6 +173,7 @@ class Handler(BaseHTTPRequestHandler):
             print(f"CRITICAL TELEGRAM ERROR: {exc}", file=sys.stderr, flush=True)
             self._send(502, f"telegram error: {str(exc)}")
             return
+
         self._send(200, "ok")
 
     def log_message(self, fmt, *args):
